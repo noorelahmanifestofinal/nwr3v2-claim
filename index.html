@@ -1,79 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>🚀 NWR3v2 Claim Portal</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { background:#000; color:#90ee90; font-family:sans-serif; text-align:center; padding:40px; }
-    button { padding:14px 24px; margin:12px; border:none; border-radius:8px; font-size:1.1rem; cursor:pointer; }
-    #connect { background:#1E90FF; color:white; }
-    #claim   { background:#28a745; color:white; }
-    #status  { margin-top:30px; font-size:1rem; white-space:pre-line; }
+    body { background: #111; color: #afa; font-family: sans-serif; text-align: center; padding: 30px; }
+    button { display: block; width: 80%; margin: 10px auto; padding: 15px; font-size: 1.2rem; border: none; border-radius: 8px; }
+    #btnConnect { background: #1E90FF; color: #fff; }
+    #btnClaim   { background: #28a745; color: #fff; }
+    #status     { margin-top: 20px; font-size: 1.1rem; }
   </style>
 </head>
 <body>
   <h1>🚀 NWR3v2 Claim Portal</h1>
-  <button id="connect">Connect Wallet</button><br/>
-  <button id="claim" disabled>💧 Claim Now</button>
-  <div id="status">⏳ Please switch to Polygon mainnet</div>
+  <button id="btnConnect">Connect Wallet</button>
+  <button id="btnClaim" disabled>💧 Claim Now</button>
+  <div id="status"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
   <script>
-    const CONTRACT_ADDRESS = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48";
-    const TOKEN_ADDRESS = "0xd6424f48214C2f7a63bcF7b29bD196698Bb463f9";
+    const CLAIM_CONTRACT = "0x1e52f7f98d96af1BFBf11bcb970611Bc02269926";
     const POLYGON_CHAIN_ID = 137;
 
-    const ABI = [{"inputs":[{"internalType":"address","name":"_nwr3v2","type":"address"},{"internalType":"address","name":"_nwr4","type":"address"},{"internalType":"address","name":"_funder","type":"address"},{"internalType":"uint256","name":"_initialClaimPercent","type":"uint256"},{"internalType":"uint256","name":"_communityBoostPercent","type":"uint256"},{"internalType":"uint256","name":"_boostThreshold","type":"uint256"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"base","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"boost","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"fee","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"referral","type":"uint256"}],"name":"Claimed","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"address","name":"referrer","type":"address"}],"name":"ReferrerSet","type":"event"},{"inputs":[],"name":"claim","outputs":[],"stateMutability":"nonpayable","type":"function"}];
+    const ABI = [
+      { "anonymous": false, "inputs": [
+          { "indexed": true, "internalType": "address", "name": "user", "type": "address" },
+          { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
+        ],
+        "name": "Claimed",
+        "type": "event"
+      },
+      { "inputs": [], "name": "claim", "outputs": [], "stateMutability": "nonpayable", "type": "function" }
+    ];
 
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    let signer, contract;
+    let provider, signer, contract;
+    const btnConnect = document.getElementById("btnConnect");
+    const btnClaim   = document.getElementById("btnClaim");
+    const statusDiv  = document.getElementById("status");
 
-    const btnConnect = document.getElementById("connect");
-    const btnClaim = document.getElementById("claim");
-    const statusDiv = document.getElementById("status");
-
-    btnConnect.onclick = async () => {
+    async function connectWallet() {
+      if (!window.ethereum) {
+        return statusDiv.innerText = "⚠️ MetaMask not detected!";
+      }
       try {
-        await provider.send("eth_requestAccounts", []);
-        signer = await provider.getSigner();
-        const network = await provider.getNetwork();
-        if (network.chainId !== POLYGON_CHAIN_ID) {
+        await ethereum.request({ method: "eth_requestAccounts" });
+        provider = new ethers.BrowserProvider(window.ethereum);
+        const net = await provider.getNetwork();
+        if (net.chainId !== POLYGON_CHAIN_ID) {
           return statusDiv.innerText = "⚠️ Please switch to Polygon mainnet";
         }
-        statusDiv.innerText = "✅ Wallet connected";
-        contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
-
-        // Auto-approve step
-        const token = new ethers.Contract(TOKEN_ADDRESS, [
-          "function approve(address,uint256) external returns (bool)",
-          "function decimals() view returns (uint8)"
-        ], signer);
-        const decimals = await token.decimals();
-        const amount = ethers.parseUnits("1000000000", decimals);
-        const approveTx = await token.approve(CONTRACT_ADDRESS, amount);
-        await approveTx.wait();
-
-        statusDiv.innerText += "\n✅ Approved for claim";
+        signer = await provider.getSigner();
+        contract = new ethers.Contract(CLAIM_CONTRACT, ABI, signer);
+        statusDiv.innerText = "✅ Connected to Polygon";
+        btnConnect.disabled = true;
         btnClaim.disabled = false;
-      } catch (err) {
-        console.error(err);
-        statusDiv.innerText = "❌ Connect or approve failed\n" + err.message;
+      } catch (e) {
+        statusDiv.innerText = "❌ Connection failed";
+        console.error(e);
       }
-    };
+    }
 
-    btnClaim.onclick = async () => {
+    async function doClaim() {
+      btnClaim.disabled = true;
+      statusDiv.innerText = "⌛ Processing claim...";
       try {
-        statusDiv.innerText = "💧 Claiming...";
         const tx = await contract.claim();
         await tx.wait();
-        statusDiv.innerText = "🎉 Claim successful!";
-        btnClaim.disabled = true;
-      } catch (err) {
-        console.error(err);
-        statusDiv.innerText = "❌ Claim failed\n" + (err.data?.message || err.message);
+        statusDiv.innerText = "🎉 Claim successful! Come back in 60 seconds";
+      } catch (e) {
+        const reason = e.data?.message || e.message;
+        statusDiv.innerText = `❌ Claim failed: ${reason}`;
+        console.error(e);
+      } finally {
+        btnClaim.disabled = false;
       }
-    };
+    }
+
+    btnConnect.onclick = connectWallet;
+    btnClaim.onclick = doClaim;
   </script>
 </body>
 </html>
