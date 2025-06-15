@@ -2,77 +2,106 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>🔹 NWR3v2 Claim Portal</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>🚀 NWR3v2 Claim Portal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { background:#111; color:#afa; font-family:sans-serif; text-align:center; padding:20px; }
-    button { width:90%; max-width:300px; padding:14px; font-size:1.1rem; margin:12px auto; display:block;
-             border:none; border-radius:6px; cursor:pointer; }
+    body { background:#111; color:#afa; font-family:sans-serif; text-align:center; padding:50px; }
+    button { padding:12px 24px; font-size:1rem; margin:10px; border:none; border-radius:6px; cursor:pointer; }
     #connect { background:#1E90FF; color:#fff; }
     #claim   { background:#28a745; color:#fff; }
-    #status  { margin-top:16px; font-size:1.1rem; min-height:1.2em; }
+    #status  { margin-top:20px; font-size:1.1rem; }
   </style>
 </head>
 <body>
-  <h2>🔹 NWR3v2 Claim Portal</h2>
-  <button id="connect">Connect Wallet</button>
+  <h1>🚀 NWR3v2 Claim Portal</h1>
+  <button id="connect">Connect Wallet</button><br/>
   <button id="claim" disabled>💧 Claim Now</button>
   <div id="status"></div>
 
+  <!-- Ethers UMD -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
   <script>
-    const CONTRACT_ADDR = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48";
-    const POLY_CHAIN_ID = 137;
-    const CLAIM_ABI = [
-      "function claim() nonpayable"
+    const CONTRACT_ADDRESS = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48";
+    const POLYGON_CHAIN_ID = 137;
+    const ABI = [
+      { "inputs": [], "name": "claim", "outputs": [], "stateMutability": "nonpayable", "type": "function" }
     ];
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    let signer, contract;
 
     const btnConnect = document.getElementById("connect");
     const btnClaim   = document.getElementById("claim");
     const statusDiv  = document.getElementById("status");
 
-    let provider, signer, contract;
-
-    function logStatus(msg) {
-      statusDiv.innerText = msg;
-      console.log(msg);
+    async function ensurePolygon() {
+      try {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x89' }]
+        });
+        return true;
+      } catch (err) {
+        if (err.code === 4902) {
+          try {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0x89',
+                chainName: 'Polygon Mainnet',
+                nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
+                rpcUrls: ['https://polygon-rpc.com/'],
+                blockExplorerUrls: ['https://polygonscan.com/']
+              }]
+            });
+            return true;
+          } catch (addErr) {
+            console.error('Add Polygon err', addErr);
+            return false;
+          }
+        }
+        console.error('Switch err', err);
+        return false;
+      }
     }
 
     btnConnect.onclick = async () => {
-      if (!window.ethereum) return logStatus("🔌 MetaMask not detected");
+      if (!window.ethereum) {
+        statusDiv.innerText = "❌ MetaMask not detected";
+        return;
+      }
+
+      statusDiv.innerText = "🔄 Checking network...";
+      const ok = await ensurePolygon();
+      if (!ok) {
+        statusDiv.innerText = "⚠️ Could not switch to Polygon";
+        return;
+      }
 
       try {
-        await window.ethereum.request({ method: "eth_requestAccounts" });
-        provider = new ethers.BrowserProvider(window.ethereum);
-        const network = await provider.getNetwork();
-        if (network.chainId !== POLY_CHAIN_ID) {
-          return logStatus("⚠️ Please switch to Polygon mainnet");
-        }
+        await provider.send("eth_requestAccounts", []);
         signer = await provider.getSigner();
-        contract = new ethers.Contract(CONTRACT_ADDR, CLAIM_ABI, signer);
-
+        contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+        statusDiv.innerText = "✅ Connected on Polygon";
         btnConnect.disabled = true;
         btnClaim.disabled = false;
-        logStatus("✅ Connected");
-      } catch (e) {
-        console.error(e);
-        logStatus("❌ Connect failed: " + (e.message || e));
+      } catch (err) {
+        console.error(err);
+        statusDiv.innerText = "❌ Connection failed: " + (err.message || err);
       }
     };
 
     btnClaim.onclick = async () => {
       try {
-        logStatus("⏳ Sending Claim...");
+        statusDiv.innerText = "⌛ Processing claim…";
         const tx = await contract.claim();
         await tx.wait();
-        logStatus("🎉 Claim succeeded!");
+        statusDiv.innerText = "🎉 Claim successful!";
         btnClaim.disabled = true;
-      } catch (e) {
-        console.error(e);
-        logStatus("❌ Claim failed: " + (e?.data?.message || e.message || e));
+      } catch (err) {
+        console.error(err);
+        statusDiv.innerText = "❌ Claim failed: " + (err.data?.message || err.message);
       }
     };
   </script>
 </body>
 </html>
-
