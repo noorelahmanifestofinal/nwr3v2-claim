@@ -20,92 +20,98 @@
   <button id="claim" disabled>💧 Claim Now</button>
   <div id="status"></div>
 
-  <!-- Ethers.js UMD via CDN -->
+  <!-- Load ethers.js v6.9.0 UMD build -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
-
+  
   <script>
-    const CONTRACT_ADDRESS = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48"; // Replace if needed
-    const TOKEN_ADDRESS = "0x3ba911e0B1000b9c5213ab978d3bD8f1efa4fC28";   // NWR3v2 token
+    const CONTRACT_ADDRESS = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48";  // Claim contract
+    const TOKEN_ADDRESS    = "0xd6424f48214C2f7a63bcF7b29bD196698Bb463f9";  // NWR3v2 token
     const POLYGON_CHAIN_ID = 137;
+
+    const ABI = [
+      {"inputs":[],"stateMutability":"nonpayable","type":"constructor"},
+      {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"collateral","type":"uint256"}],"name":"Borrowed","type":"event"},
+      {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"address","name":"referrer","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"ClaimedWithReferral","type":"event"},
+      {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"address","name":"token","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Staked","type":"event"},
+      {"inputs":[{"internalType":"address","name":"user","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"collateral","type":"uint256"}],"name":"emitBorrowed","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"inputs":[{"internalType":"address","name":"user","type":"address"},{"internalType":"address","name":"referrer","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"emitReferralClaim","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"inputs":[{"internalType":"address","name":"user","type":"address"},{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"emitStaked","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"inputs":[],"name":"faucet","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"lastFaucet","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"nwr2Token","outputs":[{"internalType":"contract IERC20","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"nwr3Token","outputs":[{"internalType":"contract IERC20","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"nwr4Token","outputs":[{"internalType":"contract IERC20","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"regionBonusPercent","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"string","name":"region","type":"string"},{"internalType":"uint256","name":"bonus","type":"uint256"}],"name":"setRegionBonus","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"totalReferralRewards","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"address","name":"referrer","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"updateReferralRewards","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"inputs":[],"name":"claim","outputs":[],"stateMutability":"nonpayable","type":"function"}
+    ];
 
     const provider = new ethers.BrowserProvider(window.ethereum);
     let signer, contract;
 
-    const abi = [
-      "function claim() external",
-      "function decimals() view returns (uint8)",
-      "function allowance(address owner, address spender) view returns (uint256)",
-      "function approve(address spender, uint256 amount) external returns (bool)"
-    ];
-
     const btnConnect = document.getElementById("connect");
     const btnApprove = document.getElementById("approve");
-    const btnClaim = document.getElementById("claim");
-    const statusDiv = document.getElementById("status");
+    const btnClaim   = document.getElementById("claim");
+    const statusDiv  = document.getElementById("status");
 
-    async function init() {
+    btnConnect.onclick = async () => {
       if (!window.ethereum) {
-        statusDiv.innerText = "MetaMask not detected";
-        return;
+        return statusDiv.innerText = "MetaMask not detected";
       }
-      btnConnect.onclick = connectWallet;
-      btnApprove.onclick = approveTokens;
-      btnClaim.onclick = claimTokens;
-      window.ethereum.on("accountsChanged", () => resetUI());
-    }
-
-    async function connectWallet() {
       try {
         await provider.send("eth_requestAccounts", []);
-        signer = await provider.getSigner();
         const network = await provider.getNetwork();
         if (network.chainId !== POLYGON_CHAIN_ID) {
-          statusDiv.innerText = "⚠️ Switch to Polygon mainnet!";
-          return;
+          return statusDiv.innerText = "⚠️ Switch to Polygon mainnet";
         }
-        contract = new ethers.Contract(CONTRACT_ADDRESS, abi, signer);
+        signer = await provider.getSigner();
+        contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
         statusDiv.innerText = "✅ Connected";
-        btnApprove.disabled = false;
         btnConnect.disabled = true;
-      } catch {
-        statusDiv.innerText = "Connection failed.";
+        btnApprove.disabled = false;
+      } catch (err) {
+        console.error(err);
+        statusDiv.innerText = "❌ Connection failed";
       }
-    }
+    };
 
-    async function approveTokens() {
+    btnApprove.onclick = async () => {
       try {
-        const token = new ethers.Contract(TOKEN_ADDRESS, abi, signer);
+        const token = new ethers.Contract(TOKEN_ADDRESS, [
+          "function decimals() view returns (uint8)",
+          "function allowance(address,address) view returns (uint256)",
+          "function approve(address,uint256) external returns(bool)"
+        ], signer);
+
         const decimals = await token.decimals();
-        const max = ethers.parseUnits("1000000", decimals);
-        const tx = await token.approve(CONTRACT_ADDRESS, max);
-        statusDiv.innerText = "Approving...";
+        const amount = ethers.parseUnits("1000000000", decimals);
+        statusDiv.innerText = "⌛ Approving tokens...";
+        const tx = await token.approve(CONTRACT_ADDRESS, amount);
         await tx.wait();
-        statusDiv.innerText = "✅ Approved! You can now claim.";
+
+        statusDiv.innerText = "✅ Tokens approved!";
+        btnApprove.disabled = true;
         btnClaim.disabled = false;
       } catch (err) {
-        statusDiv.innerText = "❌ Approval failed: " + (err.message || err);
+        console.error(err);
+        statusDiv.innerText = "❌ Approval error: " + err.message;
       }
-    }
+    };
 
-    async function claimTokens() {
+    btnClaim.onclick = async () => {
       try {
+        statusDiv.innerText = "⌛ Processing claim...";
         const tx = await contract.claim();
-        statusDiv.innerText = "Claiming...";
         await tx.wait();
         statusDiv.innerText = "🎉 Claim successful!";
+        btnClaim.disabled = true;
       } catch (err) {
-        statusDiv.innerText = "❌ Claim failed: " + (err.message || err);
+        console.error(err);
+        statusDiv.innerText = "❌ Claim failed: " + (err.data?.message || err.message);
       }
-    }
-
-    function resetUI() {
-      btnConnect.disabled = false;
-      btnApprove.disabled = true;
-      btnClaim.disabled = true;
-      statusDiv.innerText = "";
-    }
-
-    init();
+    };
   </script>
 </body>
 </html>
