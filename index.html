@@ -20,9 +20,10 @@
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
   <script>
-    const CONTRACT_ADDRESS   = "0x1e52f7f98d96af1BFBf11bcb970611Bc02269926";
-    const POLYGON_CHAIN_ID   = 137;
-    const ABI = [ /* ← your full ABI here... */ ];
+    const CONTRACT_ADDRESS = "0x1e52f7f98d96af1BFBf11bcb970611Bc02269926";
+    const POLYGON_CHAIN_ID = 137;
+
+    const ABI = [ /* your full ABI here */ ];
 
     let provider, signer, contract;
     const btnConnect = document.getElementById("connect");
@@ -31,26 +32,24 @@
 
     btnConnect.onclick = async () => {
       statusDiv.innerText = '🔄 Connecting...';
-
       try {
         provider = new ethers.BrowserProvider(window.ethereum, "any");
-        const [account] = await provider.send("eth_requestAccounts", []);
-        console.log("account", account);
+        const [acct] = await provider.send("eth_requestAccounts", []);
+        console.log("Connected account:", acct);
 
-        const network = await provider.getNetwork();
-        console.log("chainId", network.chainId);
+        const net = await provider.getNetwork();
+        console.log("Chain ID:", net.chainId);
 
-        if (network.chainId !== POLYGON_CHAIN_ID) {
-          statusDiv.innerText = `⚠️ Wrong chain: ${network.chainId}. Switching...`;
+        // Fix: accept chainId===137
+        if (net.chainId !== POLYGON_CHAIN_ID) {
+          statusDiv.innerText = `⚠️ Wrong chain: ${net.chainId}. Attempting switch...`;
           try {
-            await provider.send("wallet_switchEthereumChain", [{
-              chainId: ethers.toBeHex(POLYGON_CHAIN_ID)
-            }]);
-            statusDiv.innerText = "✅ Switched to Polygon. Reconnect!";
+            await provider.send("wallet_switchEthereumChain", [{ chainId: ethers.toBeHex(POLYGON_CHAIN_ID) }]);
+            statusDiv.innerText = "✅ Switched chain. Please reconnect.";
             return;
-          } catch (err) {
-            console.error("Switch error", err);
-            statusDiv.innerText = `❌ Couldn't switch: ${err.message}`;
+          } catch (swErr) {
+            console.error("Error switching chain:", swErr);
+            statusDiv.innerText = `❌ Switch failed: ${swErr.message}`;
             return;
           }
         }
@@ -59,29 +58,26 @@
         contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
         btnConnect.disabled = true;
         btnClaim.disabled = false;
-        statusDiv.innerText = `✅ Connected: ${account.slice(0,6)}…${account.slice(-4)}`;
-        console.log("Connected", account);
+        statusDiv.innerText = `✅ Connected: ${acct.slice(0,6)}…${acct.slice(-4)} on Polygon`;
       } catch (err) {
-        console.error("Connect failed", err);
-        statusDiv.innerText = `❌ Connect error: ${err.message}`;
+        console.error("Connect error:", err);
+        statusDiv.innerText = `❌ Connection failed: ${err.message}`;
       }
     };
 
     btnClaim.onclick = async () => {
-      statusDiv.innerText = "⌛ Sending claim...";
-      console.log("Claiming…");
-
+      statusDiv.innerText = "⌛ Claiming…";
       try {
         const tx = await contract.claim();
-        console.log("Tx hash", tx.hash);
-        statusDiv.innerText = "⌛ Waiting for confirmation…";
+        console.log("Tx initiated:", tx.hash);
+        statusDiv.innerText = "⌛ Waiting confirmation…";
         await tx.wait();
-        console.log("Claimed!");
-        statusDiv.innerText = "🎉 Tokens claimed!";
+        console.log("Claim done");
+        statusDiv.innerText = "🎉 Claim succeeded";
         btnClaim.disabled = true;
-      } catch (err) {
-        console.error("Claim failed", err);
-        const msg = err.data?.message || err.message;
+      } catch (e) {
+        console.error("Claim failed:", e);
+        const msg = e.data?.message || e.message;
         statusDiv.innerText = `❌ Claim failed: ${msg}`;
       }
     };
