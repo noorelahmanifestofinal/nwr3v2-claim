@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>🚀 NWR3v2 Claim Portal</title>
+  <style>
+    body { background:#111; color:#afa; font-family:sans-serif; text-align:center; padding:50px; }
+    button { padding:12px 24px; font-size:1rem; margin:10px; border:none; border-radius:6px; cursor:pointer; }
+    #connect { background:#1E90FF; color:#fff; }
+    #claim   { background:#28a745; color:#fff; }
+    #status  { margin-top:20px; font-size:1.1rem; }
+  </style>
+</head>
+<body>
+  <h1>🚀 NWR3v2 Claim Portal</h1>
+  <button id="connect">Connect MetaMask</button><br>
+  <button id="claim" disabled>💧 Claim Now</button>
+  <div id="status"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
+
+  <script>
+    (async () => {
+      const CONTRACT_ADDRESS = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48";
+      const ABI = ["function claim() external", "function lastClaim(address) view returns (uint256)"];
+      const connectBtn = document.getElementById("connect");
+      const claimBtn   = document.getElementById("claim");
+      const statusTxt  = document.getElementById("status");
+
+      let provider, signer, contract;
+
+      connectBtn.onclick = async () => {
+        try {
+          if (!window.ethereum) throw new Error("MetaMask not found");
+          provider = new ethers.BrowserProvider(window.ethereum);
+          await provider.send("eth_requestAccounts", []);
+          signer = await provider.getSigner();
+          contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+          connectBtn.disabled = true;
+          connectBtn.textContent = "✅ Connected";
+          claimBtn.disabled = false;
+          updateStatus();
+        } catch (err) {
+          statusTxt.textContent = "Connection error: " + (err.message || err);
+        }
+      };
+
+      claimBtn.onclick = async () => {
+        if (!contract) return statusTxt.textContent = "Connect first!";
+        try {
+          claimBtn.disabled = true;
+          statusTxt.textContent = "⏳ Processing...";
+          const tx = await contract.claim();
+          await tx.wait();
+          statusTxt.textContent = "✅ Claimed successfully!";
+        } catch (err) {
+          statusTxt.textContent = "❌ Claim failed: " + (err.message || err);
+        } finally {
+          updateStatus();
+        }
+      };
+
+      async function updateStatus() {
+        if (!contract || !signer) return;
+        try {
+          const addr = await signer.getAddress();
+          const last = await contract.lastClaim(addr);
+          const elapsed = Math.floor(Date.now()/1000) - Number(last);
+          if (elapsed < 60) {
+            statusTxt.textContent = `Next claim in ~${60 - elapsed}s`;
+            claimBtn.disabled = true;
+          } else {
+            statusTxt.textContent = "You can claim now!";
+            claimBtn.disabled = false;
+          }
+        } catch (e) {
+          console.log(e);
+        }
+      }
+
+      setInterval(() => {
+        updateStatus();
+      }, 5000);
+    })();
+  </script>
+</body>
+</html>
