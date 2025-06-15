@@ -1,114 +1,95 @@
+from pathlib import Path
+
+# Full HTML page content with ABI and auto-approval logic
+html_content = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>🚀 NWR3v2 Auto‑Claim Portal</title>
+  <title>🚀 NWR3v2 Claim Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { background:#111; color:#afa; font-family:sans-serif; text-align:center; padding:50px; }
-    button { padding:14px 28px; font-size:1.1rem; margin:15px; border:none; border-radius:8px; cursor:pointer; }
-    #btnConnect { background:#1E90FF; color:#fff; }
-    #btnClaim   { background:#28a745; color:#fff; width:200px; }
-    #status     { margin-top:30px; font-size:1.2rem; }
+    body { background:#000; color:#90ee90; font-family:sans-serif; text-align:center; padding:2rem; }
+    button { padding:1rem 2rem; font-size:1rem; margin:1rem; border:none; border-radius:8px; cursor:pointer; }
+    #connect { background:#1E90FF; color:#fff; }
+    #claim { background:#28a745; color:#fff; }
+    #status { margin-top:20px; white-space:pre-wrap; }
   </style>
 </head>
 <body>
-  <h1>🚀 NWR3v2 Auto‑Claim Portal</h1>
-  <button id="btnConnect">Connect Wallet</button><br/>
-  <button id="btnClaim" disabled>💧 Claim Now</button>
+  <h1>🚀 NWR3v2 Claim Portal</h1>
+  <button id="connect">Connect Wallet</button><br/>
+  <button id="claim" disabled>💧 Claim Now</button>
   <div id="status"></div>
 
-  <!-- ethers.js v6 UMD -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
   <script>
     const CONTRACT_ADDRESS = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48";
     const TOKEN_ADDRESS    = "0xd6424f48214C2f7a63bcF7b29bD196698Bb463f9";
     const POLYGON_CHAIN_ID = 137;
 
-    const ABI = [
-      {"inputs":[{"internalType":"address","name":"_nwr3v2","type":"address"},{"internalType":"address","name":"_nwr4","type":"address"},{"internalType":"address","name":"_funder","type":"address"},{"internalType":"uint256","name":"_initialClaimPercent","type":"uint256"},{"internalType":"uint256","name":"_communityBoostPercent","type":"uint256"},{"internalType":"uint256","name":"_boostThreshold","type":"uint256"}],"stateMutability":"nonpayable","type":"constructor"},
-      {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"base","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"boost","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"fee","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"referral","type":"uint256"}],"name":"Claimed","type":"event"},
-      {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"address","name":"referrer","type":"address"}],"name":"ReferrerSet","type":"event"},
-      {"inputs":[],"name":"boostThreshold","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"claim","outputs":[],"stateMutability":"nonpayable","type":"function"},
-      {"inputs":[],"name":"claimPercent","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"communityBoostPercent","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"communityFeePercent","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"communityWallet","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"cooldownSeconds","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"funder","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-      {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"lastClaim","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"nwr3v2Token","outputs":[{"internalType":"contract IERC20","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"nwr4Token","outputs":[{"internalType":"contract IERC20","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"referralPercent","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-      {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"referrerOf","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-      {"inputs":[{"internalType":"uint256","name":"pct","type":"uint256"},{"internalType":"uint256","name":"threshold","type":"uint256"}],"name":"setBoostParams","outputs":[],"stateMutability":"nonpayable","type":"function"},
-      {"inputs":[{"internalType":"uint256","name":"pct","type":"uint256"}],"name":"setClaimPercent","outputs":[],"stateMutability":"nonpayable","type":"function"},
-      {"inputs":[{"internalType":"uint256","name":"pct","type":"uint256"}],"name":"setReferralPercent","outputs":[],"stateMutability":"nonpayable","type":"function"},
-      {"inputs":[{"internalType":"address","name":"ref","type":"address"}],"name":"setReferrer","outputs":[],"stateMutability":"nonpayable","type":"function"}
-    ];
+    const ABI = [{ "inputs":[ { "internalType":"address", "name":"_nwr3v2", "type":"address" }, { "internalType":"address", "name":"_nwr4", "type":"address" }, { "internalType":"address", "name":"_funder", "type":"address" }, { "internalType":"uint256", "name":"_initialClaimPercent", "type":"uint256" }, { "internalType":"uint256", "name":"_communityBoostPercent", "type":"uint256" }, { "internalType":"uint256", "name":"_boostThreshold", "type":"uint256" } ], "stateMutability":"nonpayable", "type":"constructor" }, { "anonymous":false, "inputs":[ { "indexed":true, "internalType":"address", "name":"user", "type":"address" }, { "indexed":false, "internalType":"uint256", "name":"base", "type":"uint256" }, { "indexed":false, "internalType":"uint256", "name":"boost", "type":"uint256" }, { "indexed":false, "internalType":"uint256", "name":"fee", "type":"uint256" }, { "indexed":false, "internalType":"uint256", "name":"referral", "type":"uint256" } ], "name":"Claimed", "type":"event" }, { "inputs":[], "name":"claim", "outputs":[], "stateMutability":"nonpayable", "type":"function" }];
 
     const provider = new ethers.BrowserProvider(window.ethereum);
     let signer, contract;
 
-    const connectBtn = document.getElementById("btnConnect");
-    const claimBtn   = document.getElementById("btnClaim");
+    const btnConnect = document.getElementById("connect");
+    const btnClaim   = document.getElementById("claim");
     const statusDiv  = document.getElementById("status");
 
-    connectBtn.onclick = async () => {
-      if (!window.ethereum) {
-        return statusDiv.innerText = "⚠️ No Web3 wallet found";
-      }
+    btnConnect.onclick = async () => {
       try {
         await provider.send("eth_requestAccounts", []);
-        const net = await provider.getNetwork();
-        if (net.chainId !== POLYGON_CHAIN_ID) {
-          return statusDiv.innerText = "⚠️ Switch to Polygon mainnet";
+        const network = await provider.getNetwork();
+        if (network.chainId !== POLYGON_CHAIN_ID) {
+          return statusDiv.innerText = "⚠️ Please switch to Polygon mainnet";
         }
+
         signer = await provider.getSigner();
         contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
-        connectBtn.disabled = true;
-        claimBtn.disabled = false;
-        statusDiv.innerText = "✅ Wallet connected!";
-      } catch (e) {
-        console.error(e);
+        statusDiv.innerText = "✅ Wallet connected";
+        btnClaim.disabled = false;
+      } catch (err) {
+        console.error(err);
         statusDiv.innerText = "❌ Connection failed";
       }
     };
 
-    claimBtn.onclick = async () => {
-      statusDiv.innerText = "⌛ Starting...";
-      const token = new ethers.Contract(TOKEN_ADDRESS, [
-        "function allowance(address,address) view returns (uint256)",
-        "function approve(address,uint256) external returns (bool)",
-        "function decimals() view returns (uint8)"
-      ], signer);
-
+    btnClaim.onclick = async () => {
       try {
-        const addr = await signer.getAddress();
-        const allowance = await token.allowance(addr, CONTRACT_ADDRESS);
+        const token = new ethers.Contract(TOKEN_ADDRESS, [
+          "function decimals() view returns (uint8)",
+          "function approve(address spender, uint256 amount) external returns (bool)",
+          "function allowance(address owner, address spender) external view returns (uint256)"
+        ], signer);
 
-        if (allowance.isZero()) {
-          statusDiv.innerText = "⌛ Approving tokens...";
-          const dec = await token.decimals();
-          const amt = ethers.parseUnits("1000000000", dec);
-          const tx = await token.approve(CONTRACT_ADDRESS, amt);
-          await tx.wait();
-          statusDiv.innerText = "✅ Approved!";
+        const userAddress = await signer.getAddress();
+        const allowance = await token.allowance(userAddress, CONTRACT_ADDRESS);
+
+        if (allowance === 0n) {
+          const decimals = await token.decimals();
+          const amount = ethers.parseUnits("1000000000", decimals);
+          const txApprove = await token.approve(CONTRACT_ADDRESS, amount);
+          await txApprove.wait();
         }
 
-        statusDiv.innerText = "⌛ Claiming tokens...";
-        const claimTx = await contract.claim();
-        await claimTx.wait();
+        statusDiv.innerText = "⌛ Claiming...";
+        const txClaim = await contract.claim();
+        await txClaim.wait();
         statusDiv.innerText = "🎉 Claim successful!";
-        claimBtn.disabled = true;
+        btnClaim.disabled = true;
       } catch (err) {
         console.error(err);
-        const msg = err.data?.message || err.message;
-        statusDiv.innerText = `❌ Error: ${msg}`;
+        statusDiv.innerText = "❌ Claim failed: " + (err.data?.message || err.message);
       }
     };
   </script>
 </body>
 </html>
+"""
+
+# Save the HTML content to a file
+output_path = Path("/mnt/data/nwr3v2-claim-autoapprove.html")
+output_path.write_text(html_content)
+
+output_path.name
