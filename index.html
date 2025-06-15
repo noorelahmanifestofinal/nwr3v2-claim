@@ -20,78 +20,91 @@
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
   <script>
-  const CONTRACT_ADDRESS = "0x1e52f7f98d96af1BFBf11bcb970611Bc02269926";
-  const POLYGON_CHAIN_ID = 137;
-  const ABI = [ /* your full ABI here */ ];
+    const CONTRACT_ADDRESS = "0x1e52f7f98d96af1BFBf11bcb970611Bc02269926";
+    const POLYGON_CHAIN_ID = 137;
+    const ABI = [/* insert your full ABI here */];
 
-  let provider, signer, contract;
+    let provider, signer, contract;
 
-  const btnConnect = document.getElementById("connect");
-  const btnClaim   = document.getElementById("claim");
-  const statusDiv  = document.getElementById("status");
+    const btnConnect = document.getElementById("connect");
+    const btnClaim   = document.getElementById("claim");
+    const statusDiv  = document.getElementById("status");
 
-  async function resetUI() {
-    btnClaim.disabled = true;
-    statusDiv.innerText = "";
-    btnConnect.innerText = "Connect Wallet";
-  }
-
-  async function init() {
-    if (!window.ethereum) {
-      statusDiv.innerText = "❌ MetaMask not detected";
-      return;
+    function logStatus(msg) {
+      console.log("🔻", msg);
+      statusDiv.innerText = msg;
     }
-    provider = new ethers.BrowserProvider(window.ethereum);
-    window.ethereum.on("chainChanged", () => {
-      console.log("🔁 chainChanged event");
-      resetUI();
-    });
-    window.ethereum.on("accountsChanged", () => {
-      console.log("🔁 accountsChanged event");
-      resetUI();
-    });
-  }
 
-  btnConnect.onclick = async () => {
-    console.log("🔘 Connect clicked");
-    try {
-      await provider.send("eth_requestAccounts", []);
-      const network = await provider.getNetwork();
-      console.log("🌐 Current chain:", network.chainId);
-      if (network.chainId !== POLYGON_CHAIN_ID) {
-        statusDiv.innerText = "⚠️ Wrong chain. Switching to Polygon...";
-        await provider.send("wallet_switchEthereumChain", [{ chainId: "0x89" }]);
-        statusDiv.innerText = "✅ Switched to Polygon! Reconnect.";
+    function resetUI() {
+      console.log("➖ UI reset");
+      btnClaim.disabled = true;
+      btnConnect.innerText = "Connect Wallet";
+    }
+
+    async function onChainOrAccountChange() {
+      console.log("🔁 Detected chain/account change, resetting UI");
+      resetUI();
+    }
+
+    async function init() {
+      if (!window.ethereum) {
+        logStatus("❌ MetaMask not detected");
+        btnConnect.disabled = true;
         return;
+      }
+
+      window.ethereum.on("chainChanged", onChainOrAccountChange);
+      window.ethereum.on("accountsChanged", onChainOrAccountChange);
+
+      provider = new ethers.BrowserProvider(window.ethereum);
+    }
+
+    async function tryConnect() {
+      await provider.send("eth_requestAccounts", []);
+      const net = await provider.getNetwork();
+      console.log("🌐 Network ID:", net.chainId);
+      if (net.chainId !== POLYGON_CHAIN_ID) {
+        logStatus("⚠️ Wrong chain. Switching...");
+        await provider.send("wallet_switchEthereumChain", [{ chainId: "0x89" }]);
+        logStatus("✅ Switched to Polygon! Re-click Connect.");
+        return false;
       }
       signer = await provider.getSigner();
       contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
-      statusDiv.innerText = "✅ Connected on Polygon.";
+      logStatus("✅ Connected on Polygon");
       btnConnect.innerText = "Reconnected";
       btnClaim.disabled = false;
-    } catch (err) {
-      console.error(err);
-      statusDiv.innerText = "❌ " + (err.message || err);
+      return true;
     }
-  };
 
-  btnClaim.onclick = async () => {
-    console.log("💧 Claim clicked");
-    try {
-      statusDiv.innerText = "⌛ Processing claim...";
-      const tx = await contract.claim();
-      statusDiv.innerText = "⌛ Waiting confirmation...";
-      await tx.wait();
-      statusDiv.innerText = "🎉 Claim successful!";
-      btnClaim.disabled = true;
-    } catch (err) {
-      console.error(err);
-      const msg = err.data?.message || err.message;
-      statusDiv.innerText = "❌ Claim failed: " + msg;
-    }
-  };
+    btnConnect.onclick = async () => {
+      console.log("🔘 Connect clicked");
+      try {
+        const ok = await tryConnect();
+        if (!ok) console.log("🔄 Reconnection needed after switch");
+      } catch (err) {
+        console.error("❌ Connect error:", err);
+        logStatus("❌ " + (err.message || err));
+      }
+    };
 
-  init();
+    btnClaim.onclick = async () => {
+      console.log("💧 Claim clicked");
+      try {
+        logStatus("⌛ Processing claim...");
+        const tx = await contract.claim();
+        logStatus("⌛ Waiting for confirmation...");
+        await tx.wait();
+        logStatus("🎉 Claim successful!");
+        btnClaim.disabled = true;
+      } catch (err) {
+        console.error("❌ Claim error:", err);
+        const msg = err.data?.message || err.error?.message || err.message;
+        logStatus("❌ Claim failed: " + msg);
+      }
+    };
+
+    window.addEventListener("load", init);
   </script>
 </body>
 </html>
