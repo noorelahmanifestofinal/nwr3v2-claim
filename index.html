@@ -1,84 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>🚀 NWR3v2 Claim Portal</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body { background:#111; color:#afa; font-family:sans-serif; padding:20px; text-align:center; }
-    button { width:90%; max-width:400px; padding:14px; margin:10px auto; font-size:1.2rem; border:none; border-radius:8px; display:block; }
+    body { background:#111; color:#afa; font-family:sans-serif; text-align:center; padding:40px; }
+    button { display:block; width:80%; max-width:320px; margin:10px auto; padding:14px; font-size:1.1rem; border:none; border-radius:8px; cursor:pointer; }
     #connect { background:#1E90FF; color:#fff; }
-    #claim { background:#28a745; color:#fff; }
-    #status { margin:20px auto; width:90%; max-width:400px; text-align:left; white-space:pre-wrap; font-size:1rem; }
+    #claim   { background:#28a745; color:#fff; }
+    #status  { margin-top:16px; font-size:1rem; line-height:1.4; }
   </style>
 </head>
 <body>
   <h1>🚀 NWR3v2 Claim Portal</h1>
   <button id="connect">Connect Wallet</button>
-  <button id="claim" style="display:none">💧 Claim Now</button>
-  <div id="status">Status: waiting to connect...</div>
+  <button id="claim" disabled>💧 Claim Now</button>
+  <div id="status"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
   <script>
-    const CONTRACT_ADDR = "0x1e52f7f98d96af1BFBf11bcb970611Bc02269926";
-    const ABI = [{ "inputs": [], "name": "claim", "outputs": [], "stateMutability": "nonpayable", "type": "function" }];
-    const POLYGON_ID = 137;
+    const CONTRACT_ADDRESS   = "0x1e52f7f98d96af1BFBf11bcb970611Bc02269926";
+    const POLYGON_CHAIN_ID   = 137;
+    const ABI = [ /* ← your full ABI here... */ ];
 
     let provider, signer, contract;
-    const connectBtn = document.getElementById("connect");
-    const claimBtn = document.getElementById("claim");
-    const statusDiv = document.getElementById("status");
+    const btnConnect = document.getElementById("connect");
+    const btnClaim   = document.getElementById("claim");
+    const statusDiv  = document.getElementById("status");
 
-    async function log(msg) {
-      console.log(msg);
-      statusDiv.innerText += "\n" + msg;
-    }
+    btnConnect.onclick = async () => {
+      statusDiv.innerText = '🔄 Connecting...';
 
-    async function connectWallet() {
-      statusDiv.innerText = "Status: connecting...";
-      if (!window.ethereum) {
-        return log("❌ No MetaMask extension/browser.");
-      }
       try {
-        await ethereum.request({ method: "eth_requestAccounts" });
-        provider = new ethers.BrowserProvider(window.ethereum);
-        const net = await provider.getNetwork();
-        if (net.chainId !== POLYGON_ID) {
-          return log("⚠️ Wrong chain detected: " + net.chainId + ". Switch to Polygon network.");
-        }
-        signer = await provider.getSigner();
-        contract = new ethers.Contract(CONTRACT_ADDR, ABI, signer);
-        connectBtn.style.display = "none";
-        claimBtn.style.display = "block";
-        await log("✅ Connected! Ready to claim.");
-      } catch (err) {
-        await log("❌ Connect error: " + (err.data?.message || err.message));
-        console.error(err);
-      }
-    }
+        provider = new ethers.BrowserProvider(window.ethereum, "any");
+        const [account] = await provider.send("eth_requestAccounts", []);
+        console.log("account", account);
 
-    async function claimTokens() {
-      await log("⌛ Attempting claim...");
+        const network = await provider.getNetwork();
+        console.log("chainId", network.chainId);
+
+        if (network.chainId !== POLYGON_CHAIN_ID) {
+          statusDiv.innerText = `⚠️ Wrong chain: ${network.chainId}. Switching...`;
+          try {
+            await provider.send("wallet_switchEthereumChain", [{
+              chainId: ethers.toBeHex(POLYGON_CHAIN_ID)
+            }]);
+            statusDiv.innerText = "✅ Switched to Polygon. Reconnect!";
+            return;
+          } catch (err) {
+            console.error("Switch error", err);
+            statusDiv.innerText = `❌ Couldn't switch: ${err.message}`;
+            return;
+          }
+        }
+
+        signer = await provider.getSigner();
+        contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+        btnConnect.disabled = true;
+        btnClaim.disabled = false;
+        statusDiv.innerText = `✅ Connected: ${account.slice(0,6)}…${account.slice(-4)}`;
+        console.log("Connected", account);
+      } catch (err) {
+        console.error("Connect failed", err);
+        statusDiv.innerText = `❌ Connect error: ${err.message}`;
+      }
+    };
+
+    btnClaim.onclick = async () => {
+      statusDiv.innerText = "⌛ Sending claim...";
+      console.log("Claiming…");
+
       try {
         const tx = await contract.claim();
-        log("Transaction submitted: " + tx.hash);
+        console.log("Tx hash", tx.hash);
+        statusDiv.innerText = "⌛ Waiting for confirmation…";
         await tx.wait();
-        await log("🎉 Claim successful!");
+        console.log("Claimed!");
+        statusDiv.innerText = "🎉 Tokens claimed!";
+        btnClaim.disabled = true;
       } catch (err) {
-        await log("❌ Claim failed: " + (err.data?.message || err.message));
-        console.error(err);
+        console.error("Claim failed", err);
+        const msg = err.data?.message || err.message;
+        statusDiv.innerText = `❌ Claim failed: ${msg}`;
       }
-    }
-
-    connectBtn.addEventListener("click", connectWallet);
-    claimBtn.addEventListener("click", claimTokens);
-
-    // Optional: re-check network if user switches
-    window.ethereum?.on("chainChanged", () => {
-      statusDiv.innerText = "Status: network changed. Please reconnect.";
-      connectBtn.style.display = "block";
-      claimBtn.style.display = "none";
-    });
+    };
   </script>
 </body>
 </html>
